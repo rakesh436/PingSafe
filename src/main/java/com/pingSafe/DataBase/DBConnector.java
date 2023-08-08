@@ -1,10 +1,10 @@
 package com.pingSafe.DataBase;
 
 import com.pingSafe.Helper.PropertiesManager;
-import org.testng.Assert;
 
 import java.sql.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Singelton class
@@ -50,7 +50,8 @@ public class DBConnector {
         }
     }
 
-    public List<Map<String, ?>> executeQuery(Connection conn, String sqlStatement) {
+    public List<Map<String, ?>> getResultSetAsListOfMap(String sqlStatement) {
+        Connection conn = dbConnectionEstablisher();
         List<Map<String, ?>> list = null;
         ResultSet rs = null;
         PreparedStatement statement = null;
@@ -72,12 +73,12 @@ public class DBConnector {
             throws SQLException {
         ResultSetMetaData md = rs.getMetaData();
         int columns = md.getColumnCount();
-        List<Map<String, ?>> results = new ArrayList<Map<String, ?>>();
+        List<Map<String, ?>> results = new ArrayList<>();
         while (rs.next()) {
-            Map<String, Object> row = new HashMap<String, Object>();
+            Map<String, Object> row = new HashMap<>();
             for (int i = 1; i <= columns; i++) {
-                row.put(md.getColumnLabel(i).toUpperCase(), rs.getObject(i));
-            }/*w ww. j a v a 2  s . c o m*/
+                row.put(md.getColumnLabel(i), rs.getObject(i));
+            }
             results.add(row);
         }
         return results;
@@ -88,7 +89,7 @@ public class DBConnector {
             try {
                 rs.close();
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+               e.printStackTrace();
             }
         }
     }
@@ -106,13 +107,30 @@ public class DBConnector {
     public static void main(String[] args) {
         DBConnector dbConnector1 = DBConnector.getInstance();
         Connection conn = dbConnector1.dbConnectionEstablisher();
-        dbConnector1.executeQuery(conn,"SELECT * FROM  customers WHERE id = '120'");
+       // var li = dbConnector1.executeQuery(conn,"SELECT * FROM  customers WHERE id = '9653'");
+
+//        System.out.println( li.get(0).get("SMS_SENT"));
+//        System.out.println(li);
+      //  var dd = dbConnector1.getResultSetAsListOfMap("SELECT id FROM  customers");
+       // System.out.println(dd);
+
+        var li = dbConnector1.getListOfIds();
+        System.out.println(li);
     }
 
     public List<Map<String, ?>> getCustomerByID(String id){
         DBConnector dbConn = DBConnector.getInstance();
-        Connection conn = dbConn.dbConnectionEstablisher();
         String query = String.format("SELECT * FROM  customers WHERE id = '%s'",id);
-        return  dbConn.executeQuery(conn,query);
+        return  dbConn.getResultSetAsListOfMap(query);
     }
+
+    public List<String> getListOfIds(){
+        DBConnector dbConn = DBConnector.getInstance();
+        String query = String.format("SELECT id FROM  customers");
+        List<Map<String, ?>> data = dbConn.getResultSetAsListOfMap(query);
+        return data.stream()
+                .map(i -> i.get("id").toString())
+                .collect(Collectors.toList());
+    }
+
 }

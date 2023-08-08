@@ -15,7 +15,7 @@ import static io.restassured.RestAssured.given;
 
 public class Requests extends BaseURL {
 
-    public Map<String, String> validHeaders() {
+    public static final Map<String, String> validHeaders() {
         Map<String, String> header = new HashMap<>();
         header.put("Accept", "application/json");
         header.put("x-session-token", "authorized-user");

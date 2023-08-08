@@ -3,96 +3,98 @@ package com.pingSafe.test.Customers;
 import com.github.dzieciou.testing.curl.CurlLoggingRestAssuredConfigFactory;
 import com.pingSafe.BaseSetup.TestSetup;
 import com.pingSafe.Data.CustomerData;
-import com.pingSafe.EndPoints.URI;
+import com.pingSafe.DataBase.DBConnector;
 import com.pingSafe.Messages.CustomerResponse;
 import com.pingSafe.POJO.Customer;
-import io.restassured.RestAssured;
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.config.EncoderConfig;
-import io.restassured.config.HeaderConfig;
-import io.restassured.config.LogConfig;
 import io.restassured.config.RestAssuredConfig;
-import io.restassured.filter.Filter;
-import io.restassured.filter.FilterContext;
-import io.restassured.filter.log.LogDetail;
-import io.restassured.http.ContentType;
-import io.restassured.http.Header;
-import io.restassured.http.Headers;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
-import io.restassured.specification.FilterableRequestSpecification;
-import io.restassured.specification.FilterableResponseSpecification;
-import io.restassured.specification.RequestSpecification;
-import org.testng.annotations.BeforeClass;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.HashMap;
 import java.util.Map;
-
-import static io.restassured.specification.ProxySpecification.host;
+import java.util.Objects;
 
 public class CustomerE2E extends TestSetup {
 
-    RestAssuredConfig config = CurlLoggingRestAssuredConfigFactory.createConfig();
+    //RestAssuredConfig config = CurlLoggingRestAssuredConfigFactory.createConfig();
 
+    String id = "";
 
     @Test(dataProviderClass = CustomerData.class,
             dataProvider = "createCustomerData",
             description = "Create and test customer creation")
     public void createCustomer(Customer customer, CustomerResponse customerResponse) {
 
+        int expectedStatusCode = customerResponse.getResponseCode();
+        String expectedMessage = customerResponse.getResponseMessage();
         Response res = customerRequest.createCustomer(customer);
-        String id =new JsonPath(res.asString()).getString("id");
-        System.out.println("*************************");
-        res.prettyPrint();
 
-        System.out.println("*************************");
-        customerRequest.getCustomerDetailsById(id).prettyPrint();
-    }
+        JsonPath jsonPath = new JsonPath(res.asString());
 
-    @Test
-    public void getCustomer() {
+        if (expectedStatusCode == 200) {
 
-        new HeaderConfig().shouldOverwriteHeaderWithName("");
+            String aError = jsonPath.getString("message");
 
-        RequestSpecification request = RestAssured.given()
-                .header("x-session-token", "authorized-user")
-                .header("user-agent", "Apache-HttpClient/4.5.13 (Java/20.0.2)")
-                .headers("Host", "localhost:8080")
-                .headers("Content-Type", "application/json")
-                .headers("X-Hudson", "")
-                .headers("X-Jenkins", "")
-                .headers("X-Jenkins-Session", "")
-                .basePath("api")
-                .queryParam("id", 126);
+            var list = DBConnector.getInstance().getCustomerByID(customer.getId());
+//DB validation
+            Assert.assertTrue(list.size() == 1, "Multiple entries exist for unique id: " + customer.getId());
+            Assert.assertEquals(list.get(0).get("id"), customer.getId());
+            Assert.assertEquals(list.get(0).get("name"), customer.getName());
+            Assert.assertEquals(list.get(0).get("phone_number"), customer.getPhoneNumber());
 
-        Response response = request.config(config).get().then().log().all().extract().response();
-        Headers allHeaders = response.getHeaders();
-        for (Header header : allHeaders) {
-            String headerName = header.getName();
-            if (headerName.startsWith("X-Hudson") || headerName.startsWith("X-Jenkins")) {
-                System.out.println("Custom Header - " + header.getName() + ": " + header.getValue());
-            }
+           // int smsVal = (int) list.get(0).get("SMS_SENT");
+            Assert.assertTrue(Objects.isNull(list.get(0).get("sms_sent")));
+
+            Assert.assertEquals(aError, expectedMessage, "Message not same");
+
+            //for GET call
+            id = customer.getId();
+
+        } else if (expectedStatusCode == 500) {
+            String aMessage = jsonPath.getString("error");
+            Assert.assertFalse(aMessage.isBlank());
+            String aError = jsonPath.getString("error");
+            Assert.assertEquals(aError, expectedMessage, "Error message not same");
         }
 
-
-        String resString = response.asString();
-        System.out.println("Respnse Details : " + resString);
     }
 
+    @Test(dataProviderClass = CustomerData.class,
+    dataProvider = "getCustomerData")
+    public void getCustomerDetails(String id, Map<String,String> headers,CustomerResponse customerResponse) {
 
-    @Test
-    public void teste() {
+        int eStatusCode = customerResponse.getResponseCode();
+        String eMessage = customerResponse.getResponseMessage();
 
-        RestAssured.baseURI = "http://127.0.0.1";
-        RestAssured.port = 8888;
-        //  RestAssured.proxy = host("127.0.0.1").withPort(8080);
-        RestAssured.given().header("Content-Type", "application/json").
-                header("x-session-token", "authorized-user").log().all().
-                when().get("/api?id=126").then().log().all().extract().response().prettyPrint();
+        Response res = customerRequest.getCustomerDetailsById(headers,id);
+        JsonPath path = new JsonPath(res.asString());
+        System.out.println("------"+res.getStatusCode() );
+        int aStatusCode = res.getStatusCode();
+
+        if(eStatusCode == 200){
+
+            Assert.assertEquals(aStatusCode,eStatusCode);
+            var dbData = DBConnector.getInstance().getCustomerByID(id);
+//DB validation
+            Assert.assertEquals(path.getString("id"),dbData.get(0).get("id"));
+            Assert.assertEquals(path.getString("name"),dbData.get(0).get("name"));
+            Assert.assertEquals(path.getString("phone_number"),dbData.get(0).get("phone_number"));
+
+            String isSMS;
+                    if( (int)dbData.get(0).get("sms_sent") == 1)
+                        isSMS = "true";
+                    else
+                        isSMS = "false";
+
+            Assert.assertEquals(path.getString("sms_sent"),isSMS);
+        }else if(eStatusCode == 400){
+            Assert.assertEquals(path.getString("error"),eMessage);
+        }else if (eStatusCode == 403){
+            Assert.assertEquals(path.getString("error"),eMessage);
+        }
 
     }
+
 
 }
