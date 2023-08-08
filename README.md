@@ -6,7 +6,7 @@ To start with the project
 * Install maven
 * install Java20
 * clone the repository 
-* In Application.properties file change the baseUrl and path to the DB file
+* In Application.properties located in resources directory change the baseUrl and path to the DB file
 * run mvn clean install
 
 
